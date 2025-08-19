@@ -61,8 +61,13 @@ export const createBooking = async (req, res) => {
             mode: 'payment',
             success_url: `${origin}/loading/my-bookings`,
             cancel_url: `${origin}/my-bookings`,
-            metadata: { bookingId: booking._id.toString() },
+            payment_intent_data: {
+                metadata: { bookingId: booking._id.toString() } // ✅ attach here
+            }
         });
+
+
+
 
         booking.paymentLink = session.url;
         await booking.save();

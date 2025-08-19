@@ -16,17 +16,20 @@ export const stripeWebhooks = async (request, response) => {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object;
-        const sessionList = await stripeInstance.checkout.sessions.list({
-          payment_intent: paymentIntent.id
-        });
 
-        const session = sessionList.data[0];
-        const { bookingId } = session.metadata;
+        // Use metadata attached to PaymentIntent (not session list)
+        const bookingId = paymentIntent.metadata.bookingId;
+
+        if (!bookingId) {
+          console.log("No bookingId found in PaymentIntent metadata");
+          return res.status(400).send("Missing bookingId");
+        }
 
         await Booking.findByIdAndUpdate(bookingId, {
           isPaid: true,
           paymentLink: ""
         });
+
 
         break;
       }
