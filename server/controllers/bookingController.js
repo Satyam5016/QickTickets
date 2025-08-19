@@ -1,16 +1,17 @@
 import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
 import Stripe from "stripe";
-// Function to check availability of selected seats for a movie
+
+const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// Check seat availability
 const checkSeatsAvailability = async (showId, selectedSeats) => {
     try {
         const showData = await Show.findById(showId);
         if (!showData) return false;
 
         const occupiedSeats = showData.occupiedSeats;
-
         const isAnySeatTaken = selectedSeats.some(seat => occupiedSeats[seat]);
-
         return !isAnySeatTaken;
     } catch (error) {
         console.log(error.message);
@@ -24,74 +25,62 @@ export const createBooking = async (req, res) => {
         const { showId, selectedSeats } = req.body;
         const { origin } = req.headers;
 
-        // Check if the seat is available for the selected show
+        // Check seat availability
         const isAvailable = await checkSeatsAvailability(showId, selectedSeats);
+        if (!isAvailable) return res.json({ success: false, message: "Selected seats are not available." });
 
-        if (!isAvailable) {
-            return res.json({ success: false, message: "Selected seats are not available." });
-        }
-
-        // Get the show details
         const showData = await Show.findById(showId).populate('movie');
 
-        // Create a new booking
+        // Create booking
         const booking = await Booking.create({
             user: userId,
             show: showId,
             amount: showData.showPrice * selectedSeats.length,
-            bookedSeats: selectedSeats
+            bookedSeats: selectedSeats,
+            isPaid: false
         });
 
-        selectedSeats.map((seat) => {
+        // Mark seats as occupied
+        selectedSeats.forEach(seat => {
             showData.occupiedSeats[seat] = userId;
         });
-
         showData.markModified('occupiedSeats');
         await showData.save();
 
-
-        //stripe gateway
-        const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
-        const line_items = [{
-            price_data: {
-                currency: 'usd',
-                product_data: {
-                    name: showData.movie.title
-                },
-                unit_amount: Math.floor(booking.amount) * 100
-            },
-            quantity: 1
-        }]
-
+        // Create Stripe Checkout Session
         const session = await stripeInstance.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: showData.movie.title },
+                    unit_amount: Math.floor(booking.amount * 100)
+                },
+                quantity: 1
+            }],
+            mode: 'payment',
             success_url: `${origin}/loading/my-bookings`,
             cancel_url: `${origin}/my-bookings`,
-            line_items: line_items,
-            mode: 'payment',
-            metadata: {
-                bookingId: booking._id.toString()
-            },
-            expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // Expires in 30 minutes
-        })
+            metadata: { bookingId: booking._id.toString() },
+        });
 
         booking.paymentLink = session.url;
         await booking.save();
 
-        res.json({ success: true, paymentLink: session.url });
+        res.json({ success: true, url: session.url });
 
     } catch (error) {
-        console.log(error.message);
+        console.log(error);
         res.json({ success: false, message: error.message });
     }
 }
 
+// Get occupied seats
 export const getOccupiedSeats = async (req, res) => {
     try {
         const { showId } = req.params;
         const showData = await Show.findById(showId);
-
         const occupiedSeats = Object.keys(showData.occupiedSeats);
-
         res.json({ success: true, occupiedSeats });
     } catch (error) {
         console.log(error.message);

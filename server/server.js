@@ -26,8 +26,8 @@ app.use(clerkMiddleware())
 
 // API Routes
 app.get('/', (req, res) => res.send('Server is Live!'));
-app.use('/api/inngest', serve({ client: inngest, functions }))
-app.use('/api/show', showRouter)
+app.use('/api/inngest', serve({client: inngest, functions}))
+app.use('/api/show',showRouter)
 app.use('/api/bookings', bookingRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/user', userRouter)
