@@ -51,7 +51,7 @@ export const createBooking = async (req, res) => {
 
 
         //stripe gateway
-        const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
+        const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
         const line_items = [{
             price_data: {
                 currency: 'usd',
