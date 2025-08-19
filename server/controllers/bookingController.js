@@ -2,36 +2,30 @@ import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
 import Stripe from "stripe";
 
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Check seat availability
 const checkSeatsAvailability = async (showId, selectedSeats) => {
-    try {
-        const showData = await Show.findById(showId);
-        if (!showData) return false;
+    const showData = await Show.findById(showId);
+    if (!showData) return false;
 
-        const occupiedSeats = showData.occupiedSeats;
-        const isAnySeatTaken = selectedSeats.some(seat => occupiedSeats[seat]);
-        return !isAnySeatTaken;
-    } catch (error) {
-        console.log(error.message);
-        return false;
-    }
-}
+    const occupiedSeats = showData.occupiedSeats;
+    const isAnySeatTaken = selectedSeats.some(seat => occupiedSeats[seat]);
+    return !isAnySeatTaken;
+};
 
+// Create Booking
 export const createBooking = async (req, res) => {
     try {
-        const { userId } = req.auth();
+        const { userId } = req.auth(); // auth for user
         const { showId, selectedSeats } = req.body;
         const { origin } = req.headers;
 
-        // Check seat availability
         const isAvailable = await checkSeatsAvailability(showId, selectedSeats);
         if (!isAvailable) return res.json({ success: false, message: "Selected seats are not available." });
 
         const showData = await Show.findById(showId).populate('movie');
 
-        // Create booking
         const booking = await Booking.create({
             user: userId,
             show: showId,
@@ -40,15 +34,14 @@ export const createBooking = async (req, res) => {
             isPaid: false
         });
 
-        // Mark seats as occupied
         selectedSeats.forEach(seat => {
             showData.occupiedSeats[seat] = userId;
         });
         showData.markModified('occupiedSeats');
         await showData.save();
 
-        // Create Stripe Checkout Session
-        const session = await stripeInstance.checkout.sessions.create({
+        // Stripe Checkout Session
+        const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
                 price_data: {
@@ -62,12 +55,9 @@ export const createBooking = async (req, res) => {
             success_url: `${origin}/loading/my-bookings`,
             cancel_url: `${origin}/my-bookings`,
             payment_intent_data: {
-                metadata: { bookingId: booking._id.toString() } // ✅ attach here
+                metadata: { bookingId: booking._id.toString() } // attach bookingId
             }
         });
-
-
-
 
         booking.paymentLink = session.url;
         await booking.save();
@@ -78,7 +68,7 @@ export const createBooking = async (req, res) => {
         console.log(error);
         res.json({ success: false, message: error.message });
     }
-}
+};
 
 // Get occupied seats
 export const getOccupiedSeats = async (req, res) => {
@@ -91,4 +81,4 @@ export const getOccupiedSeats = async (req, res) => {
         console.log(error.message);
         res.json({ success: false, message: error.message });
     }
-}
+};
