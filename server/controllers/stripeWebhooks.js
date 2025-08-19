@@ -9,7 +9,7 @@ export const stripeWebhooks = async (request, response) => {
     let event;
 
     try {
-        // request.body must be the raw body, not parsed JSON
+        // Important: request.body must be raw, not parsed JSON
         event = stripeInstance.webhooks.constructEvent(
             request.body,
             sig,
@@ -22,26 +22,25 @@ export const stripeWebhooks = async (request, response) => {
 
     try {
         switch (event.type) {
-            case "payment_intent.succeeded": {
-                const paymentIntent = event.data.object;
+            case "checkout.session.completed": {
+                const session = event.data.object;
 
-                // Get session associated with this payment intent
-                const sessionList = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntent.id,
-                });
-
-                const session = sessionList.data[0];
-                if (session && session.metadata && session.metadata.bookingId) {
+                if (session.metadata && session.metadata.bookingId) {
                     const { bookingId } = session.metadata;
 
-                    await Booking.findByIdAndUpdate(bookingId, {
-                        isPaid: true,
-                        paymentLink: "",
-                    });
+                    const updatedBooking = await Booking.findByIdAndUpdate(
+                        bookingId,
+                        { isPaid: true, paymentLink: "" },
+                        { new: true }
+                    );
 
-                    console.log(`✅ Booking ${bookingId} marked as paid.`);
+                    if (updatedBooking) {
+                        console.log(`✅ Booking ${bookingId} marked as paid.`);
+                    } else {
+                        console.warn(`⚠️ Booking ${bookingId} not found.`);
+                    }
                 } else {
-                    console.warn("⚠️ No session or bookingId found for payment intent:", paymentIntent.id);
+                    console.warn("⚠️ No bookingId in session metadata");
                 }
                 break;
             }
