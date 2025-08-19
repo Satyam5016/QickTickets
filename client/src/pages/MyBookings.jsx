@@ -4,7 +4,6 @@ import BlurCircle from '../components/BlurCircle'
 import isoTimeFormat from '../lib/isoTimeFormat'
 import { dateFormat } from '../lib/dateFormat'
 import { useAppContext } from '../context/AppContext'
-import { Link } from 'react-router-dom'
 
 const currency = import.meta.env.VITE_CURRENCY || "₹"; // fallback if not defined
 
@@ -50,7 +49,7 @@ const MyBookings = () => {
       ) : (
         bookings.map((item) => (
           <div
-            key={item._id || item.id} // safer than using index
+            key={item._id || item.id} // safer than index
             className='flex flex-col md:flex-row justify-between bg-primary/10 border border-primary/20 rounded-lg mt-4 p-2 max-w-3xl'
           >
             <div className='flex flex-col md:flex-row'>
@@ -75,8 +74,20 @@ const MyBookings = () => {
                 <p className='text-2xl font-semibold mb-3'>
                   {currency}{item.amount}
                 </p>
-                {!item.isPaid && <Link to={item.paymentLink} className='bg-primary px-4 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer'>Pay Now</Link>}
-
+                {/* ✅ FIX: use <a> instead of <Link> so Stripe Checkout actually opens */}
+                {!item.isPaid && item.paymentLink && (
+                  <a
+                    href={item.paymentLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className='bg-primary px-4 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer'
+                  >
+                    Pay Now
+                  </a>
+                )}
+                {item.isPaid && (
+                  <span className="text-green-600 font-medium mb-3">Paid ✅</span>
+                )}
               </div>
               <div className='text-sm'>
                 <p>
