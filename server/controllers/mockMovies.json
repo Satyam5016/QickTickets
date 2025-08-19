@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "id": 1,
+      "title": "Mock Movie 1",
+      "overview": "This is a mock movie overview.",
+      "release_date": "2025-08-17"
+    },
+    {
+      "id": 2,
+      "title": "Mock Movie 2",
+      "overview": "Another mock movie overview.",
+      "release_date": "2025-08-20"
+    }
+  ]
+}

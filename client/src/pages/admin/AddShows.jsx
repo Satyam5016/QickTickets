@@ -1,26 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import Loading from '../../components/Loading';
-import Title from '../../components/admin/Title';
-import { StarIcon } from '@heroicons/react/24/outline';
-import { dummyShowsData } from '../../assets/assets';
-import { kFormatter } from '../../lib/kConverter';
-import { CheckIcon, DeleteIcon } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import Loading from "../../components/Loading";
+import Title from "../../components/admin/Title";
+import { StarIcon } from "@heroicons/react/24/outline";
+import { kFormatter } from "../../lib/kConverter";
+import { CheckIcon, Trash2Icon } from "lucide-react";
+import { useAppContext } from "../../context/AppContext";
+import toast from "react-hot-toast";
 
 const AddShows = () => {
+    const { axiosInstance, getToken, image_base_url } = useAppContext();
+
     const currency = import.meta.env.VITE_CURRENCY;
     const [nowPlayingMovies, setNowPlayingMovies] = useState([]);
     const [selectedMovie, setSelectedMovie] = useState(null);
-    const [DateTimeSelection, setDateTimeSelection] = useState({});
-    const [DateTimeInput, setDateTimeInput] = useState("");
+    const [dateTimeSelection, setDateTimeSelection] = useState({});
+    const [dateTimeInput, setDateTimeInput] = useState("");
     const [showPrice, setShowPrice] = useState("");
+    const [addingShow, setAddingShow] = useState(false);
 
+    // Fetch Now Playing Movies
     const fetchNowPlayingMovies = async () => {
-        setNowPlayingMovies(dummyShowsData);
+        try {
+            const token = await getToken();
+            const { data } = await axiosInstance.get("/show/now-playing", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (data.success) {
+                setNowPlayingMovies(data.movies);
+            } else {
+                console.error("Failed to fetch movies:", data.message);
+            }
+        } catch (error) {
+            console.error("Error fetching movies:", error);
+        }
     };
 
     const handleDateTimeAdd = () => {
-        if (!DateTimeInput) return;
-        const [date, time] = DateTimeInput.split("T");
+        if (!dateTimeInput) return;
+        const [date, time] = dateTimeInput.split("T");
         if (!date || !time) return;
 
         setDateTimeSelection((prev) => {
@@ -43,14 +61,58 @@ const AddShows = () => {
         });
     };
 
+    const handleSubmit = async () => {
+        if (!selectedMovie || Object.keys(dateTimeSelection).length === 0 || !showPrice) {
+            return toast.error("Missing required fields");
+        }
+
+        try {
+            setAddingShow(true);
+
+            // Keep time as array to match backend expectation
+            const showsInput = Object.entries(dateTimeSelection).map(([date, times]) => ({
+                date,
+                time: times,
+            }));
+
+            const payload = {
+                movieId: selectedMovie,
+                showsInput,
+                showPrice: Number(showPrice),
+            };
+
+            const { data } = await axiosInstance.post("/show/add", payload, {
+                headers: { Authorization: `Bearer ${await getToken()}` },
+            });
+
+            if (data.success) {
+                toast.success(data.message);
+                setSelectedMovie(null);
+                setDateTimeSelection({});
+                setShowPrice("");
+                setDateTimeInput("");
+            } else {
+                toast.error(data.message);
+            }
+        } catch (error) {
+            console.error("Submission error:", error);
+            toast.error("An error occurred. Please try again.");
+        }
+
+        setAddingShow(false);
+    };
+
     useEffect(() => {
         fetchNowPlayingMovies();
     }, []);
 
-    return nowPlayingMovies.length > 0 ? (
+    if (nowPlayingMovies.length === 0) return <Loading />;
+
+    return (
         <>
             <Title text1="Add" text2="Shows" />
 
+            {/* Movies List */}
             <p className="mt-10 text-lg font-medium">Now Playing Movies</p>
             <div className="overflow-x-auto pb-4">
                 <div className="group flex flex-wrap gap-4 mt-4 w-max">
@@ -62,7 +124,7 @@ const AddShows = () => {
                         >
                             <div className="relative rounded-lg overflow-hidden">
                                 <img
-                                    src={movie.poster_path}
+                                    src={`${image_base_url}${movie.poster_path}`}
                                     alt={movie.title || "Movie poster"}
                                     className="w-full object-cover brightness-90"
                                 />
@@ -71,9 +133,7 @@ const AddShows = () => {
                                         <StarIcon className="w-4 h-4 text-primary fill-primary" />
                                         {movie.vote_average.toFixed(1)}
                                     </p>
-                                    <p className="text-gray-300">
-                                        {kFormatter(movie.vote_count)} Votes
-                                    </p>
+                                    <p className="text-gray-300">{kFormatter(movie.vote_count)} Votes</p>
                                 </div>
                             </div>
                             {selectedMovie === movie.id && (
@@ -110,7 +170,7 @@ const AddShows = () => {
                 <div className="inline-flex gap-5 border border-gray-600 p-1 pl-3 rounded-lg">
                     <input
                         type="datetime-local"
-                        value={DateTimeInput}
+                        value={dateTimeInput}
                         onChange={(e) => setDateTimeInput(e.target.value)}
                         className="outline-none rounded-md bg-transparent"
                     />
@@ -124,18 +184,21 @@ const AddShows = () => {
             </div>
 
             {/* Selected Date-Time List */}
-            {Object.keys(DateTimeSelection).length > 0 && (
+            {Object.keys(dateTimeSelection).length > 0 && (
                 <div className="mt-6">
                     <h2 className="mb-2 font-medium">Selected Date-Time</h2>
                     <ul className="space-y-3">
-                        {Object.entries(DateTimeSelection).map(([date, times]) => (
+                        {Object.entries(dateTimeSelection).map(([date, times]) => (
                             <li key={date}>
                                 <div className="font-medium">{date}</div>
                                 <div className="flex flex-wrap gap-2 mt-1 text-sm">
                                     {times.map((time) => (
-                                        <div key={time} className="border border-primary px-2 py-1 flex items-center rounded">
+                                        <div
+                                            key={time}
+                                            className="border border-primary px-2 py-1 flex items-center rounded"
+                                        >
                                             <span>{time}</span>
-                                            <DeleteIcon
+                                            <Trash2Icon
                                                 onClick={() => handleRemoveTime(date, time)}
                                                 width={15}
                                                 className="ml-2 text-red-500 hover:text-red-700 cursor-pointer"
@@ -149,16 +212,15 @@ const AddShows = () => {
                 </div>
             )}
 
+            {/* Submit Button */}
             <button
+                onClick={handleSubmit}
+                disabled={addingShow}
                 className="bg-primary text-white px-8 py-2 mt-6 rounded hover:bg-primary/90 transition-all cursor-pointer"
             >
-                Add Show
+                {addingShow ? "Adding..." : "Add Show"}
             </button>
-
-            
         </>
-    ) : (
-        <Loading />
     );
 };
 

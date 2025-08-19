@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { dummyDashboardData } from '../../assets/assets';
+import { useAppContext } from '../../context/AppContext';
 import Title from '../../components/admin/Title';
 import Loading from '../../components/Loading';
 import BlurCircle from '../../components/BlurCircle';
+import toast from 'react-hot-toast';
 
 // Heroicons
 import {
@@ -16,6 +17,7 @@ import {
 import { dateFormat } from '../../lib/dateFormat';
 
 const Dashboard = () => {
+    const { axiosInstance, getToken, image_base_url, user } = useAppContext();
     const currency = import.meta.env.VITE_CURRENCY;
 
     const [dashboardData, setDashboardData] = useState({
@@ -27,19 +29,35 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
 
     const fetchDashboardData = async () => {
-        setDashboardData(dummyDashboardData);
-        setLoading(false);
+        try {
+            const token = await getToken();
+            const { data } = await axiosInstance.get("/admin/dashboard", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.success) {
+                setDashboardData(data.dashboardData);
+            } else {
+                toast.error(data.message);
+            }
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+            toast.error("Error fetching dashboard data");
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
+        if (user) {
+            fetchDashboardData();
+        }
+    }, [user]);
 
     const dashboardCards = [
-        { title: "Total Bookings", value: dashboardData.totalBookings || "0", icon: ChartPieIcon },
-        { title: "Total Revenue", value: currency + (dashboardData.totalRevenue || "0"), icon: CurrencyDollarIcon },
-        { title: "Active Shows", value: dashboardData.activeShows.length || "0", icon: PlayCircleIcon },
-        { title: "Total Users", value: dashboardData.totalUsers || "0", icon: UserGroupIcon }
+        { title: "Total Bookings", value: dashboardData.totalBookings || 0, icon: ChartPieIcon },
+        { title: "Total Revenue", value: `${currency}${dashboardData.totalRevenue || 0}`, icon: CurrencyDollarIcon },
+        { title: "Active Shows", value: dashboardData.activeShows?.length || 0, icon: PlayCircleIcon },
+        { title: "Total Users", value: dashboardData.totalUsers || 0, icon: UserGroupIcon }
     ];
 
     if (loading) return <Loading />;
@@ -71,7 +89,7 @@ const Dashboard = () => {
             <p className="mt-10 text-lg font-medium">Active Shows</p>
             <div className="relative flex flex-wrap gap-6 mt-4 max-w-5xl">
                 <BlurCircle top="100px" left="-10%" />
-                {dashboardData.activeShows.length === 0 ? (
+                {dashboardData.activeShows?.length === 0 ? (
                     <p className="text-gray-500">No active shows available.</p>
                 ) : (
                     dashboardData.activeShows.map((show) => (
@@ -80,13 +98,13 @@ const Dashboard = () => {
                             className="w-56 rounded-lg overflow-hidden bg-primary/10 border border-primary/20 hover:-translate-y-1 transition duration-300"
                         >
                             <img
-                                src={show.movie?.poster_path || ''}
-                                alt={show.movie?.title || ''}
+                                src={show.movie?.poster_path ? `${image_base_url}${show.movie.poster_path}` : ''}
+                                alt={show.movie?.title || 'Untitled'}
                                 className="h-60 w-full object-cover"
                             />
                             <p className="font-medium p-2 truncate">{show.movie?.title || "Untitled"}</p>
                             <div className="flex items-center justify-between px-2">
-                                <p className="text-lg font-medium">{currency} {show.showPrice}</p>
+                                <p className="text-lg font-medium">{currency} {show.showPrice || 0}</p>
                                 <p className="flex items-center gap-1 text-sm text-gray-400 mt-1 pr-1">
                                     <StarIcon className="w-4 h-4 text-primary" />
                                     {show.movie?.vote_average?.toFixed(1) || "N/A"}

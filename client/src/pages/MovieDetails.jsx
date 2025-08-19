@@ -1,39 +1,101 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { dummyDateTimeData, dummyShowsData } from "../assets/assets";
 import { Heart, PlayCircleIcon, StarIcon } from "lucide-react";
+import toast from "react-hot-toast";
 import timeFormat from "../lib/timeFormat";
 import DateSelect from "../components/DateSelect";
 import MovieCard from "../components/MovieCard";
 import Loading from "../components/Loading";
+import { useAppContext } from "../context/AppContext";
 
 const MovieDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [show, setShow] = useState(null);
+  const dateSelectRef = useRef(null); // ✅ added ref
+
+  const {
+    shows,
+    axiosInstance,
+    getToken,
+    user,
+    fetchFavoriteMovies,
+    favoriteMovies,
+    image_base_url,
+  } = useAppContext();
+
+  // ✅ Fetch movie details
+  const getShow = async () => {
+    try {
+      const { data } = await axiosInstance.get(`/show/all/${id}`);
+      if (data.success) {
+        // handle both cases: { show: {...} } or { movie: {...} }
+        setShow(data.show || { movie: data.movie, dateTime: data.dateTime });
+      }
+    } catch (error) {
+      console.error("Error fetching show:", error);
+      toast.error("Failed to fetch movie details");
+    }
+  };
+
+  // ✅ Handle add/remove favorites
+  const handleFavorite = async () => {
+    try {
+      if (!user) return toast.error("Please login to proceed");
+
+      const { data } = await axiosInstance.post(
+        "/user/update-favorite",
+        { movieId: id },
+        {
+          headers: { Authorization: `Bearer ${await getToken()}` },
+        }
+      );
+
+      if (data.success) {
+        // Check if movie is already in favorites
+        const isFavorite = favoriteMovies.find(
+          (movie) => String(movie._id) === String(id)
+        );
+
+        // Update frontend state immediately
+        if (isFavorite) {
+          // remove from favorites
+          const updatedFavorites = favoriteMovies.filter(
+            (movie) => String(movie._id) !== String(id)
+          );
+          fetchFavoriteMovies && fetchFavoriteMovies(); // refresh from backend if needed
+          toast.success("Removed from favorites");
+        } else {
+          // add to favorites
+          fetchFavoriteMovies && fetchFavoriteMovies(); // refresh from backend
+          toast.success("Added to favorites");
+        }
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error("Error updating favorites:", error);
+      toast.error("Something went wrong");
+    }
+  };
+
 
   useEffect(() => {
-    const foundShow = dummyShowsData.find((s) => s._id === id);
-    if (foundShow) {
-      setShow({
-        movie: foundShow,
-        dateTime: dummyDateTimeData,
-      });
-    }
+    getShow();
   }, [id]);
 
-  if (!show) {
-    return <Loading/>
-  }
-
-
+  if (!show) return <Loading />;
 
   return (
     <div className="px-6 md:px-16 lg:px-40 pt-24 md:pt-32">
       <div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto">
         {/* Poster */}
         <img
-          src={show.movie.poster_path || "/placeholder.jpg"}
+          src={
+            show.movie.poster_path
+              ? image_base_url + show.movie.poster_path
+              : "/placeholder.jpg"
+          }
           alt={show.movie.title}
           className="max-md:mx-auto rounded-xl h-[26rem] max-w-[18rem] object-cover"
         />
@@ -48,7 +110,7 @@ const MovieDetails = () => {
 
           <div className="flex items-center gap-2 text-gray-300">
             <StarIcon className="w-5 h-5 text-primary fill-primary" />
-            {show.movie.vote_average.toFixed(1)} User Rating
+            {show.movie.vote_average?.toFixed(1)} User Rating
           </div>
 
           <p className="text-gray-400 mt-2 text-sm leading-tight max-w-xl">
@@ -57,8 +119,8 @@ const MovieDetails = () => {
 
           <p className="text-gray-300 text-sm">
             {timeFormat(show.movie.runtime)} •{" "}
-            {show.movie.genres.map((genre) => genre.name).join(", ")} •{" "}
-            {show.movie.release_date.split("-")[0]}
+            {show.movie.genres?.map((genre) => genre.name).join(", ")} •{" "}
+            {show.movie.release_date?.split("-")[0]}
           </p>
 
           {/* Actions */}
@@ -68,15 +130,28 @@ const MovieDetails = () => {
               Watch Trailer
             </button>
 
-            <a
-              href="#dateSelect"
+            {/* ✅ Updated Buy Tickets button */}
+            <button
+              onClick={() =>
+                dateSelectRef.current?.scrollIntoView({ behavior: "smooth" })
+              }
               className="px-10 py-3 text-sm bg-primary hover:bg-primary-dull transition rounded-md font-medium cursor-pointer active:scale-95"
             >
               Buy Tickets
-            </a>
+            </button>
 
-            <button className="bg-gray-700 p-2.5 rounded-full transition cursor-pointer active:scale-95">
-              <Heart className="w-5 h-5" />
+            <button
+              onClick={handleFavorite}
+              className="bg-gray-700 p-2.5 rounded-full transition cursor-pointer active:scale-95"
+            >
+              <Heart
+                className={`w-5 h-5 ${favoriteMovies.find(
+                  (movie) => String(movie._id) === String(id)
+                )
+                  ? "fill-primary text-primary"
+                  : ""
+                  }`}
+              />
             </button>
           </div>
         </div>
@@ -86,13 +161,17 @@ const MovieDetails = () => {
       <p className="text-lg font-medium mt-20">Your Favorite Cast</p>
       <div className="overflow-x-auto no-scrollbar mt-8 pb-4">
         <div className="flex items-center gap-4 w-max px-4">
-          {show.movie.casts.slice(0, 12).map((cast, index) => (
+          {show.movie.casts?.slice(0, 12).map((cast, index) => (
             <div
               key={index}
               className="flex flex-col items-center text-center"
             >
               <img
-                src={cast.profile_path || "/avatar-placeholder.png"}
+                src={
+                  image_base_url + cast.profile_path
+                    ? image_base_url + cast.profile_path
+                    : "/avatar-placeholder.png"
+                }
                 alt={cast.name}
                 className="rounded-full h-20 aspect-square object-cover"
               />
@@ -103,13 +182,15 @@ const MovieDetails = () => {
       </div>
 
       {/* Date Selection */}
-      <DateSelect dateTime={show.dateTime} id={id} />
+      <div ref={dateSelectRef}>
+        <DateSelect dateTime={show.dateTime} id={id} />
+      </div>
 
       {/* Recommendations */}
       <p className="text-lg font-medium mt-20 mb-8">You May Also Like</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-        {dummyShowsData.slice(0, 4).map((movie, index) => (
-          <MovieCard key={index} movie={movie} />
+        {shows.slice(0, 4).map((movie) => (
+          <MovieCard key={movie._id} movie={movie} />
         ))}
       </div>
 

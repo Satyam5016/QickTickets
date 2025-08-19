@@ -1,25 +1,41 @@
 import React, { useState, useEffect } from 'react'
-import { dummyBookingData } from '../assets/assets'
 import Loading from '../components/Loading'
 import BlurCircle from '../components/BlurCircle'
 import isoTimeFormat from '../lib/isoTimeFormat'
 import { dateFormat } from '../lib/dateFormat'
+import { useAppContext } from '../context/AppContext'
 
 const MyBookings = () => {
+
+  const { axiosInstance, getToken, user, image_base_url } = useAppContext();
+
   const currency = import.meta.env.VITE_CURRENCY
 
   const [bookings, setBookings] = useState([])
   const [isLoading, setIsLoading] = useState(true)
 
   const getMyBookings = async () => {
-    // Simulate API fetch
-    setBookings(dummyBookingData)
-    setIsLoading(false)
-  }
+    try {
+      const { data } = await axiosInstance.get('/user/bookings', {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+
+
+      if (data.success) {
+        setBookings(data.bookings);
+      }
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    getMyBookings()
-  }, [])
+    if (user) {
+      getMyBookings()
+    }
+  }, [user])
 
   if (isLoading) return <Loading />
 
@@ -40,7 +56,7 @@ const MyBookings = () => {
           >
             <div className='flex flex-col md:flex-row'>
               <img
-                src={item.show.movie.poster_path}
+                src={image_base_url + item.show.movie.poster_path}
                 alt={item.show.movie.title}
                 className='md:max-w-48 aspect-video h-auto object-cover object-bottom rounded'
               />
