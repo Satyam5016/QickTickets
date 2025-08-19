@@ -75,14 +75,8 @@ const MyBookings = () => {
                 <p className='text-2xl font-semibold mb-3'>
                   {currency}{item.amount}
                 </p>
-                {!item.isPaid && item.paymentLink && (
-                  <Link
-                    to={item.paymentLink}
-                    className='bg-primary px-4 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer'
-                  >
-                    Pay Now
-                  </Link>
-                )}
+                {!item.isPaid && <Link to={item.paymentLink} className='bg-primary px-4 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer'>Pay Now</Link>}
+
               </div>
               <div className='text-sm'>
                 <p>
