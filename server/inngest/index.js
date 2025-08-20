@@ -5,7 +5,6 @@ import Show from "../models/Show.js";
 
 // Create a client to send and receive events
 export const inngest = new Inngest({ id: "movie-ticket-booking" });
-
 /**
  * Sync user creation from Clerk -> MongoDB
  */
@@ -75,57 +74,28 @@ const syncUserUpdation = inngest.createFunction(
   }
 );
 
-/**
- * Release seats and delete booking if unpaid after 10 mins
- */
 const releaseSeatsAndDeleteBooking = inngest.createFunction(
-  { id: "release-seats-delete-booking" },
+  { id: 'release-seats-delete-booking' },
   { event: "app/checkpayment" },
   async ({ event, step }) => {
     const tenMinutesLater = new Date(Date.now() + 10 * 60 * 1000);
-    await step.sleepUntil("wait-for-10-minutes", tenMinutesLater);
+    await step.sleepUntil('wait-for-10-minutes', tenMinutesLater);
 
-    await step.run("check-payment-status", async () => {
+    await step.run('check-payment-status', async () => {
       const bookingId = event.data.bookingId;
-      const booking = await Booking.findById(bookingId);
-
-      if (!booking) {
-        console.warn(`Booking not found: ${bookingId}`);
-        return;
-      }
-
+      const booking = await Booking.findById(bookingId)
       if (!booking.isPaid) {
-        const show = await Show.findById(booking.show);
-        if (!show) {
-          console.warn(`Show not found for booking: ${bookingId}`);
-          return;
-        }
-
-        // ✅ Handle seats properly depending on schema
-        if (Array.isArray(show.occupiedSeats)) {
-          // if it's an array
-          show.occupiedSeats = show.occupiedSeats.filter(
-            (seat) => !booking.bookedSeats.includes(seat)
-          );
-        } else if (typeof show.occupiedSeats === "object") {
-          // if it's an object { seatNumber: true }
-          booking.bookedSeats.forEach((seat) => {
-            delete show.occupiedSeats[seat];
-          });
-          show.markModified("occupiedSeats");
-        }
-
+        const show = await Show .findById(booking.show);
+        booking.bookedSeats.forEach((seat) => {
+          delete show.occupiedSeats[seat];
+        });
+        show.markModified('occupiedSeats');
         await show.save();
         await Booking.findByIdAndDelete(booking._id);
-        console.log(`Released seats & deleted unpaid booking ${bookingId}`);
       }
+
     });
   }
 );
 
-export const functions = [
-  syncUserCreation,
-  syncUserDeletion,
-  syncUserUpdation,
-  releaseSeatsAndDeleteBooking,
-];
+export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, releaseSeatsAndDeleteBooking];
