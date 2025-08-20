@@ -18,11 +18,8 @@ const port = process.env.PORT || 3000;
 await connectDB();
 
 // ----------- Stripe Webhook (PUBLIC, no auth) ----------
-app.post(
-    '/api/stripe/webhook',
-    express.raw({ type: 'application/json' }),
-    stripeWebhooks
-);
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhooks);
+
 
 // ----------- Middleware for other routes ----------
 app.use(express.json());
