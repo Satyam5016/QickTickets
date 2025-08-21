@@ -1,20 +1,23 @@
 import Stripe from "stripe";
 import Booking from "../models/Booking.js";
+import { inngest } from "../inngest/index.js";
 
-export const stripeWebhooks = async (request, response) => {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  const sig = request.headers["stripe-signature"];
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+export const stripeWebhooks = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
   let event;
+
   try {
-    // request.body is a raw Buffer thanks to express.raw
+    // request.body must be raw Buffer (configure express.raw in app.js)
     event = stripe.webhooks.constructEvent(
-      request.body,
+      req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    return response.status(400).send(`Webhook Error: ${err.message}`);
+    console.error("❌ Stripe webhook signature verification failed:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   try {
@@ -22,26 +25,40 @@ export const stripeWebhooks = async (request, response) => {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object;
         const bookingId = paymentIntent?.metadata?.bookingId;
+
         if (!bookingId) {
-          console.log("No bookingId in metadata");
-          return response.status(400).send("Missing bookingId");
+          console.error("⚠️ No bookingId in payment metadata");
+          return res.status(400).send("Missing bookingId");
         }
 
+        // Mark booking as paid
         await Booking.findByIdAndUpdate(bookingId, {
           isPaid: true,
           paymentLink: ""
         });
+
+        // Fire Inngest event → triggers confirmation email
+        await inngest.send({
+          name: "app/show.booked",
+          data: { bookingId }
+        });
+
         break;
       }
 
-      // optional: handle failed payments to free seats, etc.
+      case "payment_intent.payment_failed": {
+        console.warn("⚠️ Payment failed:", event.data.object.id);
+        // Optionally: trigger seat release event immediately
+        break;
+      }
+
       default:
-        console.log("Unhandled event type:", event.type);
+        console.log("Unhandled Stripe event type:", event.type);
     }
 
-    return response.json({ received: true });
+    return res.json({ received: true });
   } catch (err) {
-    console.error("Webhook processing error:", err);
-    return response.status(500).send("Internal Server Error");
+    console.error("🔥 Error handling Stripe webhook:", err);
+    return res.status(500).send("Internal Server Error");
   }
 };
