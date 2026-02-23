@@ -7,12 +7,14 @@ import DateSelect from "../components/DateSelect";
 import MovieCard from "../components/MovieCard";
 import Loading from "../components/Loading";
 import { useAppContext } from "../context/AppContext";
+import TrailersSection from "../components/TrailersSection"; // ✅ make sure you import this
 
 const MovieDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [show, setShow] = useState(null);
-  const dateSelectRef = useRef(null); // ✅ added ref
+  const dateSelectRef = useRef(null);
+  const trailerRef = useRef(null); // ✅ added ref for trailer section
 
   const {
     shows,
@@ -29,7 +31,6 @@ const MovieDetails = () => {
     try {
       const { data } = await axiosInstance.get(`/show/all/${id}`);
       if (data.success) {
-        // handle both cases: { show: {...} } or { movie: {...} }
         setShow(data.show || { movie: data.movie, dateTime: data.dateTime });
       }
     } catch (error) {
@@ -52,22 +53,18 @@ const MovieDetails = () => {
       );
 
       if (data.success) {
-        // Check if movie is already in favorites
         const isFavorite = favoriteMovies.find(
           (movie) => String(movie._id) === String(id)
         );
 
-        // Update frontend state immediately
         if (isFavorite) {
-          // remove from favorites
           const updatedFavorites = favoriteMovies.filter(
             (movie) => String(movie._id) !== String(id)
           );
-          fetchFavoriteMovies && fetchFavoriteMovies(); // refresh from backend if needed
+          fetchFavoriteMovies && fetchFavoriteMovies();
           toast.success("Removed from favorites");
         } else {
-          // add to favorites
-          fetchFavoriteMovies && fetchFavoriteMovies(); // refresh from backend
+          fetchFavoriteMovies && fetchFavoriteMovies();
           toast.success("Added to favorites");
         }
       } else {
@@ -78,7 +75,6 @@ const MovieDetails = () => {
       toast.error("Something went wrong");
     }
   };
-
 
   useEffect(() => {
     getShow();
@@ -125,12 +121,18 @@ const MovieDetails = () => {
 
           {/* Actions */}
           <div className="flex items-center flex-wrap gap-4 mt-4">
-            <button className="flex items-center gap-2 px-7 py-3 text-sm bg-gray-800 hover:bg-gray-900 transition rounded-md font-medium cursor-pointer active:scale-95">
+            {/* ✅ Watch Trailer scroll */}
+            <button
+              onClick={() =>
+                trailerRef.current?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="flex items-center gap-2 px-7 py-3 text-sm bg-gray-800 hover:bg-gray-900 transition rounded-md font-medium cursor-pointer active:scale-95"
+            >
               <PlayCircleIcon className="w-5 h-5" />
               Watch Trailer
             </button>
 
-            {/* ✅ Updated Buy Tickets button */}
+            {/* ✅ Buy Tickets scroll */}
             <button
               onClick={() =>
                 dateSelectRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -145,12 +147,13 @@ const MovieDetails = () => {
               className="bg-gray-700 p-2.5 rounded-full transition cursor-pointer active:scale-95"
             >
               <Heart
-                className={`w-5 h-5 ${favoriteMovies.find(
-                  (movie) => String(movie._id) === String(id)
-                )
-                  ? "fill-primary text-primary"
-                  : ""
-                  }`}
+                className={`w-5 h-5 ${
+                  favoriteMovies.find(
+                    (movie) => String(movie._id) === String(id)
+                  )
+                    ? "fill-primary text-primary"
+                    : ""
+                }`}
               />
             </button>
           </div>
@@ -162,10 +165,7 @@ const MovieDetails = () => {
       <div className="overflow-x-auto no-scrollbar mt-8 pb-4">
         <div className="flex items-center gap-4 w-max px-4">
           {show.movie.casts?.slice(0, 12).map((cast, index) => (
-            <div
-              key={index}
-              className="flex flex-col items-center text-center"
-            >
+            <div key={index} className="flex flex-col items-center text-center">
               <img
                 src={
                   image_base_url + cast.profile_path
@@ -184,6 +184,11 @@ const MovieDetails = () => {
       {/* Date Selection */}
       <div ref={dateSelectRef}>
         <DateSelect dateTime={show.dateTime} id={id} />
+      </div>
+
+      {/* ✅ Trailer Section with ref */}
+      <div ref={trailerRef}>
+        <TrailersSection />
       </div>
 
       {/* Recommendations */}
