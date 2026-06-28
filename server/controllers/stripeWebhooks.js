@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import Booking from "../models/Booking.js";
 import { inngest } from "../inngest/index.js";
+import crypto from "crypto";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -31,10 +32,19 @@ export const stripeWebhooks = async (req, res) => {
           return res.status(400).send("Missing bookingId");
         }
 
-        // Mark booking as paid
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+          console.error("⚠️ Booking not found:", bookingId);
+          return res.status(404).send("Booking not found");
+        }
+
+        // Mark booking as paid and issue a ticket code for the QR ticket
         await Booking.findByIdAndUpdate(bookingId, {
           isPaid: true,
-          paymentLink: ""
+          paymentLink: "",
+          stripePaymentIntentId: paymentIntent.id,
+          ticketCode: booking.ticketCode || `QT-${bookingId}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`,
+          ticketIssuedAt: booking.ticketIssuedAt || new Date(),
         });
 
         // Fire Inngest event → triggers confirmation email

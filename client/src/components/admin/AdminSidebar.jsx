@@ -16,23 +16,23 @@ const AdminSidebar = () => {
         { name: 'List Bookings', path: '/admin/list-bookings', icon: ListCollapseIcon },
     ]
     return (
-        <div className='className="h-[calc(100vh-64px)] md:flex flex-col items-center pt-8 max-w-13 md:max-w-60 w-full border-r border-gray-300/20 text-sm"'>
+        <aside className='flex h-[calc(100vh-64px)] w-16 flex-col items-center border-r border-white/10 bg-white/[0.03] pt-8 text-sm md:w-64'>
             <img className='h-9 md:h-14 w-9 md:w-14 rounded-full mx-auto' src={user.imageUrl} alt="sidebar" />
             <p className='mt-2 text-base max-md:hidden'>{user.firstName} {user.lastName}</p>
-            <div className='w-full'>
+            <div className='mt-5 w-full px-3'>
                 {adminNavlinks.map((link, index) => (
-                    <NavLink key={index} to={link.path} end className={({ isActive }) => `relative flex items-center justify-center gap-2 w-full py-2.5 min-md:pl-10 first:mt-6 text-gray-400 ${isActive && 'bg-primary/15 text-primary group'}`}>
+                    <NavLink key={index} to={link.path} end className={({ isActive }) => `relative mb-1 flex w-full items-center gap-3 rounded-md px-4 py-3 text-gray-400 transition hover:bg-white/5 hover:text-white ${isActive && 'bg-primary/15 text-primary'}`}>
                         {({ isActive }) => (
                             <>
                                 <link.icon className="w-5 h-5" />
                                 <p className="max-md:hidden">{link.name}</p>
-                                <span className={`w-1.5 h-10 rounded-l-1 right-0 absolute ${isActive && 'bg-primary'}`} />
+                                {isActive && <span className='absolute right-2 h-6 w-1 rounded bg-primary' />}
                             </>
                         )}
                     </NavLink>
                 ))}
             </div>
-        </div>
+        </aside>
     )
 }
 

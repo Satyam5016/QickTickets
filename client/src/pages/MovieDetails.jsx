@@ -13,6 +13,11 @@ const MovieDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [show, setShow] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, totalReviews: 0 });
+  const [canReview, setCanReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [submittingReview, setSubmittingReview] = useState(false);
   const dateSelectRef = useRef(null);
   const trailerRef = useRef(null); // ✅ added ref for trailer section
 
@@ -36,6 +41,56 @@ const MovieDetails = () => {
     } catch (error) {
       console.error("Error fetching show:", error);
       toast.error("Failed to fetch movie details");
+    }
+  };
+
+  const getReviews = async () => {
+    try {
+      const headers = user ? { Authorization: `Bearer ${await getToken()}` } : {};
+      const { data } = await axiosInstance.get(`/show/${id}/reviews`, { headers });
+
+      if (data.success) {
+        setReviews(data.reviews || []);
+        setReviewSummary(data.summary || { averageRating: 0, totalReviews: 0 });
+        setCanReview(Boolean(data.canReview));
+
+        if (data.userReview) {
+          setReviewForm({
+            rating: data.userReview.rating,
+            comment: data.userReview.comment,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+    }
+  };
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+
+    if (!user) return toast.error("Please login to review this movie");
+    if (!reviewForm.comment.trim()) return toast.error("Please write a short review");
+
+    try {
+      setSubmittingReview(true);
+      const { data } = await axiosInstance.post(
+        `/show/${id}/reviews`,
+        reviewForm,
+        { headers: { Authorization: `Bearer ${await getToken()}` } }
+      );
+
+      if (data.success) {
+        toast.success(data.message);
+        getReviews();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      toast.error("Unable to save review");
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -79,6 +134,10 @@ const MovieDetails = () => {
   useEffect(() => {
     getShow();
   }, [id]);
+
+  useEffect(() => {
+    getReviews();
+  }, [id, user]);
 
   if (!show) return <Loading />;
 
@@ -189,6 +248,93 @@ const MovieDetails = () => {
       {/* ✅ Trailer Section with ref */}
       <div ref={trailerRef}>
         <TrailersSection />
+      </div>
+
+      {/* Reviews */}
+      <div className="mt-20 max-w-5xl">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+          <div>
+            <p className="text-lg font-medium">Reviews & Ratings</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {reviewSummary.totalReviews > 0
+                ? `${reviewSummary.averageRating} out of 5 from ${reviewSummary.totalReviews} review${reviewSummary.totalReviews === 1 ? "" : "s"}`
+                : "No reviews yet"}
+            </p>
+          </div>
+          {reviewSummary.totalReviews > 0 && (
+            <div className="flex items-center gap-1 text-primary">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <StarIcon
+                  key={star}
+                  className={`w-5 h-5 ${star <= Math.round(reviewSummary.averageRating) ? "fill-primary" : ""}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {canReview ? (
+          <form onSubmit={submitReview} className="border border-primary/20 bg-primary/5 rounded-md p-4 mb-6">
+            <p className="text-sm font-medium mb-3">Your Review</p>
+            <div className="flex items-center gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  type="button"
+                  key={rating}
+                  onClick={() => setReviewForm((prev) => ({ ...prev, rating }))}
+                  className="p-1"
+                  aria-label={`Rate ${rating} stars`}
+                >
+                  <StarIcon
+                    className={`w-6 h-6 text-primary ${rating <= reviewForm.rating ? "fill-primary" : ""}`}
+                  />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reviewForm.comment}
+              onChange={(e) => setReviewForm((prev) => ({ ...prev, comment: e.target.value }))}
+              maxLength={300}
+              rows={3}
+              placeholder="Write a short review after watching..."
+              className="w-full bg-transparent border border-gray-700 rounded-md p-3 text-sm outline-none resize-none"
+            />
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-xs text-gray-500">{reviewForm.comment.length}/300</p>
+              <button
+                disabled={submittingReview}
+                className="px-5 py-2 text-sm bg-primary hover:bg-primary-dull transition rounded-md font-medium disabled:opacity-60"
+              >
+                {submittingReview ? "Saving..." : "Save Review"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-gray-500 mb-6">You can review this movie after watching a paid show.</p>
+        )}
+
+        <div className="space-y-3">
+          {reviews.map((review) => (
+            <div key={review._id} className="border border-primary/20 bg-primary/5 rounded-md p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {review.user?.image && (
+                    <img src={review.user.image} alt={review.user?.name || "User"} className="h-9 w-9 rounded-full object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{review.user?.name || "Moviegoer"}</p>
+                    <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-primary shrink-0">
+                  <StarIcon className="w-4 h-4 fill-primary" />
+                  <span className="text-sm text-white">{review.rating}</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-300 mt-3 leading-relaxed">{review.comment}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Recommendations */}

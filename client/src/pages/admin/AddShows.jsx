@@ -3,36 +3,57 @@ import Loading from "../../components/Loading";
 import Title from "../../components/admin/Title";
 import { StarIcon } from "@heroicons/react/24/outline";
 import { kFormatter } from "../../lib/kConverter";
-import { CheckIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, CopyIcon, Trash2Icon } from "lucide-react";
 import { useAppContext } from "../../context/AppContext";
 import toast from "react-hot-toast";
 
 const AddShows = () => {
     const { axiosInstance, getToken, image_base_url } = useAppContext();
 
-    const currency = import.meta.env.VITE_CURRENCY;
+    const currency = String(import.meta.env.VITE_CURRENCY || "$").replace(/['"]/g, "").trim() || "$";
     const [nowPlayingMovies, setNowPlayingMovies] = useState([]);
     const [selectedMovie, setSelectedMovie] = useState(null);
     const [dateTimeSelection, setDateTimeSelection] = useState({});
     const [dateTimeInput, setDateTimeInput] = useState("");
-    const [showPrice, setShowPrice] = useState("");
+    const [venue, setVenue] = useState({
+        city: "Mumbai",
+        theater: "QuickTickets Cinema",
+        screen: "Screen 1",
+    });
+    const [seatCategoryPrices, setSeatCategoryPrices] = useState({
+        Regular: "",
+        Premium: "",
+        Recliner: "",
+        VIP: "",
+    });
     const [addingShow, setAddingShow] = useState(false);
+    const [isFetchingMovies, setIsFetchingMovies] = useState(true);
+    const [moviesError, setMoviesError] = useState("");
+    const seatCategories = [
+        { name: "Regular", hint: "Front rows" },
+        { name: "Premium", hint: "Middle rows" },
+        { name: "Recliner", hint: "Comfort seats" },
+        { name: "VIP", hint: "Best view" },
+    ];
 
     // Fetch Now Playing Movies
     const fetchNowPlayingMovies = async () => {
         try {
-            const token = await getToken();
-            const { data } = await axiosInstance.get("/show/now-playing", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            setIsFetchingMovies(true);
+            setMoviesError("");
+            const { data } = await axiosInstance.get("/show/now-playing");
 
             if (data.success) {
                 setNowPlayingMovies(data.movies);
             } else {
                 console.error("Failed to fetch movies:", data.message);
+                setMoviesError(data.message || "Failed to fetch movies from TMDB.");
             }
         } catch (error) {
             console.error("Error fetching movies:", error);
+            setMoviesError("Unable to reach the movie API.");
+        } finally {
+            setIsFetchingMovies(false);
         }
     };
 
@@ -62,8 +83,13 @@ const AddShows = () => {
     };
 
     const handleSubmit = async () => {
-        if (!selectedMovie || Object.keys(dateTimeSelection).length === 0 || !showPrice) {
-            return toast.error("Missing required fields");
+        const hasInvalidPrice = seatCategories.some(({ name }) => {
+            const price = Number(seatCategoryPrices[name]);
+            return !Number.isFinite(price) || price <= 0;
+        });
+
+        if (!selectedMovie || Object.keys(dateTimeSelection).length === 0 || hasInvalidPrice || !venue.city || !venue.theater || !venue.screen) {
+            return toast.error("Select a movie, add showtimes, and enter a price above 0 for every seat category.");
         }
 
         try {
@@ -78,7 +104,13 @@ const AddShows = () => {
             const payload = {
                 movieId: selectedMovie,
                 showsInput,
-                showPrice: Number(showPrice),
+                showPrice: Number(seatCategoryPrices.Regular),
+                city: venue.city,
+                theater: venue.theater,
+                screen: venue.screen,
+                seatCategoryPrices: Object.fromEntries(
+                    seatCategories.map(({ name }) => [name, Number(seatCategoryPrices[name])])
+                ),
             };
 
             const { data } = await axiosInstance.post("/show/add", payload, {
@@ -89,8 +121,18 @@ const AddShows = () => {
                 toast.success(data.message);
                 setSelectedMovie(null);
                 setDateTimeSelection({});
-                setShowPrice("");
+                setSeatCategoryPrices({
+                    Regular: "",
+                    Premium: "",
+                    Recliner: "",
+                    VIP: "",
+                });
                 setDateTimeInput("");
+                setVenue({
+                    city: "Mumbai",
+                    theater: "QuickTickets Cinema",
+                    screen: "Screen 1",
+                });
             } else {
                 toast.error(data.message);
             }
@@ -102,11 +144,33 @@ const AddShows = () => {
         setAddingShow(false);
     };
 
+    const setSeatCategoryPrice = (category, value) => {
+        if (Number(value) < 0) return;
+        setSeatCategoryPrices((prev) => ({
+            ...prev,
+            [category]: value,
+        }));
+    };
+
+    const applyRegularPriceToAll = () => {
+        const regularPrice = seatCategoryPrices.Regular;
+        if (!regularPrice || Number(regularPrice) <= 0) {
+            return toast.error("Enter a regular seat price first.");
+        }
+
+        setSeatCategoryPrices({
+            Regular: regularPrice,
+            Premium: regularPrice,
+            Recliner: regularPrice,
+            VIP: regularPrice,
+        });
+    };
+
     useEffect(() => {
         fetchNowPlayingMovies();
     }, []);
 
-    if (nowPlayingMovies.length === 0) return <Loading />;
+    if (isFetchingMovies) return <Loading />;
 
     return (
         <>
@@ -114,8 +178,16 @@ const AddShows = () => {
 
             {/* Movies List */}
             <p className="mt-10 text-lg font-medium">Now Playing Movies</p>
+            {moviesError && (
+                <div className="mt-4 max-w-3xl rounded-md border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-200">
+                    {moviesError} Check `TMDB_API_KEY` and backend network access, then retry.
+                    <button onClick={fetchNowPlayingMovies} className="ml-3 font-semibold text-white underline">
+                        Retry
+                    </button>
+                </div>
+            )}
             <div className="overflow-x-auto pb-4">
-                <div className="group flex flex-wrap gap-4 mt-4 w-max">
+                <div className="group flex flex-wrap gap-4 mt-4">
                     {nowPlayingMovies.map((movie) => (
                         <div
                             key={movie.id}
@@ -146,21 +218,85 @@ const AddShows = () => {
                         </div>
                     ))}
                 </div>
+                {!moviesError && nowPlayingMovies.length === 0 && (
+                    <div className="mt-4 rounded-md border border-white/10 bg-white/5 p-5 text-sm text-gray-400">
+                        TMDB did not return any now-playing movies.
+                    </div>
+                )}
             </div>
 
-            {/* Show Price Input */}
+            {/* Seat Category Price Inputs */}
             <div className="mt-8">
-                <label className="block text-sm font-medium mb-2">Show Price</label>
-                <div className="inline-flex items-center gap-2 border border-gray-600 px-3 py-2 rounded-md">
-                    <p className="text-gray-400 text-sm">{currency}</p>
+                <label className="block text-sm font-medium mb-2">Theater Location</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-4xl">
                     <input
-                        min={0}
-                        type="number"
-                        value={showPrice}
-                        onChange={(e) => setShowPrice(e.target.value)}
-                        placeholder="Enter show price"
-                        className="outline-none bg-transparent w-full"
+                        value={venue.city}
+                        onChange={(e) => setVenue((prev) => ({ ...prev, city: e.target.value }))}
+                        placeholder="City"
+                        className="border border-gray-600 px-3 py-2 rounded-md outline-none bg-transparent"
                     />
+                    <input
+                        value={venue.theater}
+                        onChange={(e) => setVenue((prev) => ({ ...prev, theater: e.target.value }))}
+                        placeholder="Theater"
+                        className="border border-gray-600 px-3 py-2 rounded-md outline-none bg-transparent"
+                    />
+                    <input
+                        value={venue.screen}
+                        onChange={(e) => setVenue((prev) => ({ ...prev, screen: e.target.value }))}
+                        placeholder="Screen"
+                        className="border border-gray-600 px-3 py-2 rounded-md outline-none bg-transparent"
+                    />
+                </div>
+            </div>
+
+            {/* Seat Category Price Inputs */}
+            <div className="mt-8 max-w-5xl rounded-lg border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <label className="block text-sm font-semibold">Seat Category Prices</label>
+                        <p className="mt-1 text-xs text-gray-400">Set the ticket price for each seat type. All values must be greater than 0.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={applyRegularPriceToAll}
+                        className="inline-flex w-max items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/10"
+                    >
+                        <CopyIcon className="h-4 w-4" />
+                        Copy Regular to All
+                    </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {seatCategories.map(({ name, hint }) => {
+                        const value = seatCategoryPrices[name];
+                        const isInvalid = value !== "" && Number(value) <= 0;
+
+                        return (
+                            <div key={name} className={`rounded-md border p-4 transition ${isInvalid ? "border-red-400/40 bg-red-500/10" : "border-white/10 bg-black/20"}`}>
+                                <div className="mb-3 flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-sm font-semibold">{name}</p>
+                                        <p className="text-xs text-gray-500">{hint}</p>
+                                    </div>
+                                    <span className="rounded bg-white/5 px-2 py-1 text-xs text-gray-400">{currency}</span>
+                                </div>
+                                <div className="flex h-11 items-center rounded-md border border-white/10 bg-[#0b0d13] px-3 focus-within:border-primary/60">
+                                    <span className="mr-2 text-sm text-gray-500">{currency}</span>
+                                    <input
+                                        min={1}
+                                        step={1}
+                                        type="number"
+                                        value={value}
+                                        onChange={(e) => setSeatCategoryPrice(name, e.target.value)}
+                                        placeholder="Enter price"
+                                        className="w-full min-w-0 bg-transparent text-base font-semibold outline-none placeholder:text-sm placeholder:font-normal placeholder:text-gray-600"
+                                    />
+                                </div>
+                                {isInvalid && <p className="mt-2 text-xs text-red-300">Price must be greater than 0.</p>}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

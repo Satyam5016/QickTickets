@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllBookings, getAllShows, getDashboardData, isAdmin } from "../controllers/adminController.js";
+import { getAllBookings, getAllShows, getDashboardData, isAdmin, reviewCancellationRequest } from "../controllers/adminController.js";
 import { protectAdmin } from "../middleware/Auth.js";
 
 const adminRouter = express.Router();
@@ -8,5 +8,6 @@ adminRouter.get('/is-admin', protectAdmin, isAdmin);
 adminRouter.get('/dashboard', protectAdmin, getDashboardData);
 adminRouter.get('/all-shows', protectAdmin, getAllShows);
 adminRouter.get('/all-bookings', protectAdmin, getAllBookings);
+adminRouter.patch('/bookings/:bookingId/cancellation', protectAdmin, reviewCancellationRequest);
 
 export default adminRouter;

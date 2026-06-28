@@ -4,8 +4,8 @@
 
 
 @theme {
-  --color-primary: #F84565;
-  --color-primary-dull: #D63854;
+  --color-primary: #FF475F;
+  --color-primary-dull: #D9344D;
 }
 
 
@@ -17,7 +17,32 @@
 
 body{
   color: white;
-  background-color: #09090B;
+  background:
+    radial-gradient(circle at top left, rgba(255, 71, 95, 0.14), transparent 30rem),
+    radial-gradient(circle at 85% 12%, rgba(58, 134, 255, 0.10), transparent 26rem),
+    linear-gradient(180deg, #08090d 0%, #0d0f16 48%, #09090b 100%);
+  min-height: 100vh;
+}
+
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.glass-panel {
+  background: rgba(15, 18, 27, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(18px);
+}
+
+.cinema-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035));
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.22);
+}
+
+.text-balance {
+  text-wrap: balance;
 }
 .no-scrollbar{
   scrollbar-width: none;

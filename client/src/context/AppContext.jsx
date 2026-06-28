@@ -6,7 +6,7 @@ import { useUser, useAuth } from "@clerk/clerk-react";
 
 // ✅ Create Axios instance with baseURL
 const axiosInstance = axios.create({
-    baseURL: "http://localhost:3000/api", // adjust if needed for production
+    baseURL: `${import.meta.env.VITE_BASE_URL || "http://localhost:3000"}/api`,
 });
 
 const AppContext = createContext();
@@ -16,7 +16,7 @@ const AppProvider = ({ children }) => {
     const [shows, setShows] = useState([]);
     const [favoriteMovies, setFavoriteMovies] = useState([]);
     
-    const image_base_url=import.meta.env.VITE_TMDB_IMAGE_BASE_URL
+    const image_base_url = (import.meta.env.VITE_TMDB_IMAGE_BASE_URL || "").trim()
 
 
     const { user } = useUser();
